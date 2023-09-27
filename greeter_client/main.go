@@ -27,7 +27,7 @@ import (
 
 	"google.golang.org/grpc"
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
-	// "google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/credentials/insecure"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
@@ -39,6 +39,7 @@ const (
 var (
 	addr = flag.String("addr", "localhost:50051", "the address to connect to")
 	name = flag.String("name", defaultName, "Name to greet")
+	alive = flag.Bool("alive", false, "keep connection alive")
 )
 
 func main() {
@@ -49,11 +50,24 @@ func main() {
 		grpc_retry.WithMax(5),
 		grpc_retry.WithPerRetryTimeout(time.Second*5),
 	}
-	conn, err := grpc.DialContext(context.Background(),*addr, 
-	grpc.WithTransportCredentials(insecure.NewCredentials()),
-	grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)),
-	// grpc.WithKeepaliveParams(keepalive.ClientParameters{}),
-	)
+
+	
+
+	var conn *grpc.ClientConn
+	var err error
+	if *alive {
+		conn, err = grpc.DialContext(context.Background(),*addr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{}),
+		)
+	} else {
+		conn, err = grpc.DialContext(context.Background(),*addr, 
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithUnaryInterceptor(grpc_retry.UnaryClientInterceptor(opts...)),
+		)
+	}
+
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

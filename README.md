@@ -1,3 +1,5 @@
+# modified version of https://github.com/grpc/grpc-go/tree/master/examples/helloworld
+
 # gRPC Hello World
 
 Follow these setup to run the [quick start][] example:
@@ -27,3 +29,10 @@ example code) or if you're having trouble running this example, see [Quick
 Start][].
 
 [quick start]: https://grpc.io/docs/languages/go/quickstart
+
+
+export GODEBUG=http2debug=2
+go run ./greeter_client
+go run ./greeter_server
+sudo netstat -anp | grep greeter_c
+sudo iptables -I INPUT -p tcp --dport <<PORT>> -j DROP
