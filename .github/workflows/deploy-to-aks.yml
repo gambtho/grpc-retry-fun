@@ -1,0 +1,141 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/**'
+      - 'greeter_server/**'
+      - 'helloworld/**'
+      - 'Dockerfile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/deploy-to-aks.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  AKS_CLUSTER: thgamble_dt
+  AKS_RESOURCE_GROUP: thgamble_dt_group
+  AKS_NAMESPACE: somens
+  DEPLOYMENT_NAME: grpc-retry-fun
+
+# Required for OIDC authentication
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=1.0
+            type=sha,prefix={{branch}}-,suffix=,format=short
+            type=ref,event=branch
+            type=ref,event=pr
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+  deploy-to-aks:
+    name: Deploy to AKS
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+      
+      - name: Get AKS credentials
+        uses: azure/aks-set-context@v4
+        with:
+          cluster-name: ${{ env.AKS_CLUSTER }}
+          resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+      
+      - name: Create namespace if not exists
+        run: |
+          kubectl create namespace ${{ env.AKS_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+      
+      - name: Update deployment image in manifests
+        run: |
+          # Update the image reference in deployment.yaml to use the newly built image
+          sed -i "s|image: grpc-retry-fun:1.0|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:1.0|g" deploy/kubernetes/deployment.yaml
+      
+      - name: Deploy to AKS
+        run: |
+          kubectl apply -f deploy/kubernetes/ -n ${{ env.AKS_NAMESPACE }}
+      
+      - name: Wait for deployment rollout
+        run: |
+          kubectl rollout status deployment/${{ env.DEPLOYMENT_NAME }} -n ${{ env.AKS_NAMESPACE }} --timeout=5m
+      
+      - name: Verify deployment
+        run: |
+          echo "=== Deployment Status ==="
+          kubectl get deployments -n ${{ env.AKS_NAMESPACE }} -l app=${{ env.DEPLOYMENT_NAME }}
+          
+          echo ""
+          echo "=== Pod Status ==="
+          kubectl get pods -n ${{ env.AKS_NAMESPACE }} -l app=${{ env.DEPLOYMENT_NAME }}
+          
+          echo ""
+          echo "=== Service Status ==="
+          kubectl get svc -n ${{ env.AKS_NAMESPACE }} -l app=${{ env.DEPLOYMENT_NAME }}
+      
+      - name: Get deployment logs (on failure)
+        if: failure()
+        run: |
+          echo "=== Recent Pod Events ==="
+          kubectl get events -n ${{ env.AKS_NAMESPACE }} --sort-by='.lastTimestamp' --field-selector involvedObject.name=${{ env.DEPLOYMENT_NAME }} | tail -20
+          
+          echo ""
+          echo "=== Pod Logs ==="
+          kubectl logs -n ${{ env.AKS_NAMESPACE }} -l app=${{ env.DEPLOYMENT_NAME }} --tail=100 --prefix=true || true
