@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-retry-fun-service
+  namespace: somens
+  labels:
+    app: grpc-retry-fun
+spec:
+  type: ClusterIP
+  selector:
+    app: grpc-retry-fun
+  ports:
+  - name: grpc
+    protocol: TCP
+    port: 50051
+    targetPort: 50051
+  sessionAffinity: None

@@ -1,0 +1,129 @@
+name: Deploy gRPC Server to AKS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/**'
+      - 'greeter_server/**'
+      - 'helloworld/**'
+      - 'Dockerfile'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/deploy-to-aks.yml'
+  workflow_dispatch:
+
+env:
+  AZURE_RESOURCE_GROUP: thgamble_dt_group
+  AZURE_CLUSTER_NAME: thgamble_dt
+  AZURE_SUBSCRIPTION_ID: d0ecd0d2-779b-4fd0-8f04-d46d07f05703
+  AZURE_TENANT_ID: 72f988bf-86f1-41af-91ab-2d7cd011db47
+  NAMESPACE: somens
+  IMAGE_NAME: grpc-retry-fun
+  IMAGE_TAG: 1.0
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Azure Login with OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+    
+    - name: Get ACR login server
+      id: acr
+      run: |
+        # List ACRs in the resource group and get the first one
+        ACR_NAME=$(az acr list --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query "[0].name" -o tsv)
+        if [ -z "$ACR_NAME" ]; then
+          echo "No ACR found in resource group. Using Docker Hub or local registry."
+          echo "registry=" >> $GITHUB_OUTPUT
+        else
+          ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --resource-group ${{ env.AZURE_RESOURCE_GROUP }} --query loginServer -o tsv)
+          echo "registry=${ACR_LOGIN_SERVER}/" >> $GITHUB_OUTPUT
+          echo "acr_name=${ACR_NAME}" >> $GITHUB_OUTPUT
+          echo "Found ACR: ${ACR_LOGIN_SERVER}"
+        fi
+    
+    - name: Login to Azure Container Registry
+      if: steps.acr.outputs.acr_name != ''
+      run: |
+        az acr login --name ${{ steps.acr.outputs.acr_name }}
+    
+    - name: Build and push Docker image
+      run: |
+        FULL_IMAGE_NAME="${{ steps.acr.outputs.registry }}${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+        echo "Building image: ${FULL_IMAGE_NAME}"
+        docker build -t ${FULL_IMAGE_NAME} .
+        
+        if [ -n "${{ steps.acr.outputs.registry }}" ]; then
+          echo "Pushing image to ACR..."
+          docker push ${FULL_IMAGE_NAME}
+          echo "Image pushed successfully: ${FULL_IMAGE_NAME}"
+        else
+          echo "No ACR configured. Image built locally: ${FULL_IMAGE_NAME}"
+        fi
+        
+        echo "image=${FULL_IMAGE_NAME}" >> $GITHUB_ENV
+    
+    - name: Set AKS Context
+      uses: azure/aks-set-context@v4
+      with:
+        cluster-name: ${{ env.AZURE_CLUSTER_NAME }}
+        resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+    
+    - name: Create namespace if not exists
+      run: |
+        kubectl get namespace ${{ env.NAMESPACE }} || kubectl create namespace ${{ env.NAMESPACE }}
+    
+    - name: Update deployment with image
+      run: |
+        sed -i "s|image:.*|image: ${{ env.image }}|g" deploy/kubernetes/deployment.yaml
+        echo "Updated deployment to use image: ${{ env.image }}"
+    
+    - name: Validate Kubernetes manifests
+      run: |
+        kubectl apply --dry-run=client -f deploy/kubernetes/ -n ${{ env.NAMESPACE }}
+        echo "Kubernetes manifests validated successfully"
+    
+    - name: Deploy to AKS
+      run: |
+        kubectl apply -f deploy/kubernetes/ -n ${{ env.NAMESPACE }}
+        echo "Deployment applied successfully"
+    
+    - name: Wait for deployment rollout
+      run: |
+        kubectl rollout status deployment/grpc-retry-fun -n ${{ env.NAMESPACE }} --timeout=5m
+        echo "Deployment rollout completed"
+    
+    - name: Verify deployment
+      run: |
+        echo "=== Pods Status ==="
+        kubectl get pods -n ${{ env.NAMESPACE }} -l app=grpc-retry-fun
+        echo ""
+        echo "=== Service Status ==="
+        kubectl get svc -n ${{ env.NAMESPACE }} -l app=grpc-retry-fun
+        echo ""
+        echo "=== Deployment Status ==="
+        kubectl get deployment grpc-retry-fun -n ${{ env.NAMESPACE }}
+    
+    - name: Check pod logs
+      if: always()
+      run: |
+        echo "=== Recent logs from pods ==="
+        kubectl logs -n ${{ env.NAMESPACE }} -l app=grpc-retry-fun --tail=50 || true
