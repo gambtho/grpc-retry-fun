@@ -19,11 +19,13 @@ spec:
     spec:
       containers:
       - name: greeter-server
-        # IMPORTANT: Update this image reference for production use
+        # IMPORTANT: Update this image reference for production use with ACR
         # For Azure Container Registry: <your-acr-name>.azurecr.io/grpc-retry-fun:1.0
         # Example: myregistry.azurecr.io/grpc-retry-fun:1.0
         image: grpc-retry-fun:1.0
-        imagePullPolicy: IfNotPresent  # Change to Always when using ACR
+        # IfNotPresent is appropriate when using immutable tags like 1.0
+        # Use Always only if using mutable tags (e.g., 'latest') during development
+        imagePullPolicy: IfNotPresent
         ports:
         - name: grpc
           containerPort: 50051
