@@ -1,0 +1,29 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+*.md
+
+# Artifacts and deployment
+artifacts/
+deploy/
+
+# Build artifacts
+*.tar
+*.tar.gz
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Test files
+*_test.go
+
+# Client code (only building server)
+greeter_client/
