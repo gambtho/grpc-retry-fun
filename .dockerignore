@@ -1,0 +1,28 @@
+# Git
+.git
+.github
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# Build artifacts
+artifacts/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Deploy configs (not needed in image)
+deploy/
+
+# Client (we only need server)
+greeter_client/

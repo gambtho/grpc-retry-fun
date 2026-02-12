@@ -1,0 +1,96 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/**'
+      - 'greeter_server/**'
+      - 'helloworld/**'
+      - 'go.mod'
+      - 'go.sum'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-to-aks.yml'
+  workflow_dispatch:
+
+env:
+  AZURE_TENANT_ID: 72f988bf-86f1-41af-91ab-2d7cd011db47
+  AZURE_SUBSCRIPTION_ID: d0ecd0d2-779b-4fd0-8f04-d46d07f05703
+  AKS_CLUSTER_NAME: thgamble_dt
+  AKS_RESOURCE_GROUP: thgamble_dt_group
+  NAMESPACE: somens
+  IMAGE_NAME: grpc-retry-fun
+  IMAGE_TAG: 1.0
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+        docker save ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} -o /tmp/image.tar
+        
+    - name: Azure Login with OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        
+    - name: Set AKS context
+      uses: azure/aks-set-context@v4
+      with:
+        cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+        resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+        
+    - name: Get ACR login server
+      id: get-acr
+      run: |
+        ACR_NAME=$(az acr list --resource-group ${{ env.AKS_RESOURCE_GROUP }} --query "[0].name" -o tsv)
+        ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
+        echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
+        echo "ACR_NAME=$ACR_NAME" >> $GITHUB_OUTPUT
+        
+    - name: Login to Azure Container Registry
+      run: |
+        az acr login --name ${{ steps.get-acr.outputs.ACR_NAME }}
+        
+    - name: Tag and push Docker image to ACR
+      run: |
+        docker load -i /tmp/image.tar
+        docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        docker tag ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+        docker push ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        docker push ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+        
+    - name: Update Kubernetes manifests with ACR image
+      run: |
+        sed -i "s|image: grpc-retry-fun:1.0|image: ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|g" deploy/kubernetes/deployment.yaml
+        
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+        
+    - name: Deploy to AKS
+      run: |
+        kubectl apply -f deploy/kubernetes/deployment.yaml -n ${{ env.NAMESPACE }}
+        kubectl apply -f deploy/kubernetes/service.yaml -n ${{ env.NAMESPACE }}
+        
+    - name: Verify deployment
+      run: |
+        kubectl rollout status deployment/grpc-retry-fun -n ${{ env.NAMESPACE }} --timeout=5m
+        kubectl get pods -n ${{ env.NAMESPACE }} -l app=grpc-retry-fun
+        kubectl get svc -n ${{ env.NAMESPACE }} grpc-retry-fun
