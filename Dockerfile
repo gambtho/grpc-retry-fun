@@ -31,5 +31,5 @@ COPY --from=builder /build/greeter_server /app/greeter_server
 EXPOSE 50051
 
 # Run the greeter_server as non-root user (distroless nonroot user)
+# The application uses the flag package and defaults to port 50051
 ENTRYPOINT ["/app/greeter_server"]
-CMD ["--port=50051"]
