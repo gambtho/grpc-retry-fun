@@ -1,0 +1,111 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/**'
+      - 'Dockerfile'
+      - 'greeter_server/**'
+      - 'helloworld/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/deploy-to-aks.yml'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: grpc-retry-fun
+  IMAGE_TAG: "1.0"
+  AKS_CLUSTER: thgamble_dt
+  AKS_RESOURCE_GROUP: thgamble_dt_group
+  AKS_NAMESPACE: somens
+  # ACR_NAME should be set as a GitHub secret or environment variable
+  # Example: myregistry.azurecr.io
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Azure Login (OIDC)
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Login to Azure Container Registry
+      run: |
+        az acr login --name ${{ secrets.ACR_NAME }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: |
+          ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Set AKS context
+      uses: azure/aks-set-context@v4
+      with:
+        cluster-name: ${{ env.AKS_CLUSTER }}
+        resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ env.AKS_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Update deployment image
+      run: |
+        # Update the image reference in the deployment manifest with ACR registry
+        sed -i "s|image: grpc-retry-fun:1.0|image: ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}|g" deploy/kubernetes/deployment.yaml
+
+    - name: Deploy to AKS
+      run: |
+        kubectl apply -f deploy/kubernetes/ -n ${{ env.AKS_NAMESPACE }}
+
+    - name: Wait for deployment rollout
+      run: |
+        kubectl rollout status deployment/grpc-retry-fun -n ${{ env.AKS_NAMESPACE }} --timeout=5m
+
+    - name: Verify deployment
+      run: |
+        kubectl get pods -n ${{ env.AKS_NAMESPACE }} -l app=grpc-retry-fun
+        kubectl get svc -n ${{ env.AKS_NAMESPACE }} -l app=grpc-retry-fun
+
+    - name: Display deployment info
+      if: always()
+      run: |
+        echo "=== Deployment Status ==="
+        kubectl get deployment grpc-retry-fun -n ${{ env.AKS_NAMESPACE }}
+        echo ""
+        echo "=== Pod Status ==="
+        kubectl get pods -n ${{ env.AKS_NAMESPACE }} -l app=grpc-retry-fun
+        echo ""
+        echo "=== Service Info ==="
+        kubectl get svc grpc-retry-fun -n ${{ env.AKS_NAMESPACE }}
+        echo ""
+        echo "=== HPA Status ==="
+        kubectl get hpa grpc-retry-fun -n ${{ env.AKS_NAMESPACE }} || echo "HPA not found"
+        echo ""
+        echo "=== PDB Status ==="
+        kubectl get pdb grpc-retry-fun -n ${{ env.AKS_NAMESPACE }} || echo "PDB not found"
+        echo ""
+        echo "=== Recent Events ==="
+        kubectl get events -n ${{ env.AKS_NAMESPACE }} --sort-by='.lastTimestamp' | tail -10

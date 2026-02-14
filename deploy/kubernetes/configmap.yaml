@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grpc-retry-fun-config
+  namespace: somens
+  labels:
+    app: grpc-retry-fun
+data:
+  # gRPC server configuration
+  grpc.port: "50051"
+  
+  # Logging configuration
+  log.level: "info"
+  log.format: "json"
+  
+  # gRPC retry policy configuration
+  retry.max_attempts: "5"
+  retry.initial_backoff: "1s"
+  retry.max_backoff: "10s"
+  retry.backoff_multiplier: "2"
+  retry.retryable_status_codes: "UNAVAILABLE,UNKNOWN,DEADLINE_EXCEEDED"
+  
+  # Health check configuration
+  health.check_interval: "5s"
+  
+  # Connection settings
+  grpc.keepalive_time: "30s"
+  grpc.keepalive_timeout: "10s"
+  grpc.max_connection_idle: "5m"
+  grpc.max_connection_age: "10m"
+  grpc.max_connection_age_grace: "5m"

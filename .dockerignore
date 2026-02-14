@@ -1,0 +1,39 @@
+# Git files
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+LICENSE
+*.md
+!go.mod
+!go.sum
+
+# Build artifacts
+greeter_server_bin
+*.log
+*.out
+*.exe
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test files
+*_test.go
+
+# Client (not needed for server image)
+greeter_client
+
+# Artifacts and deploy directories
+artifacts
+deploy
+
+# Docker files (no need to copy into build context)
+Dockerfile
+.dockerignore

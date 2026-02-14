@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-retry-fun
+  namespace: somens
+  labels:
+    app: grpc-retry-fun
+    version: "1.0"
+    component: grpc-server
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: grpc-retry-fun
+  template:
+    metadata:
+      labels:
+        app: grpc-retry-fun
+        version: "1.0"
+        component: grpc-server
+      annotations:
+        prometheus.io/scrape: "false"
+        prometheus.io/port: "50051"
+    spec:
+      # Security context at pod level
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Anti-affinity for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - grpc-retry-fun
+              topologyKey: kubernetes.io/hostname
+      
+      containers:
+      - name: grpc-server
+        # Image will be updated during deployment with ACR registry path
+        # Format: <acr-name>.azurecr.io/grpc-retry-fun:1.0
+        image: grpc-retry-fun:1.0
+        imagePullPolicy: Always
+        
+        # Security context at container level
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 65532
+          runAsGroup: 65532
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        
+        # Resource limits and requests
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        
+        # gRPC health checks
+        livenessProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        readinessProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Startup probe for slow-starting containers
+        startupProbe:
+          grpc:
+            port: 50051
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 12
+        
+        # Environment variables
+        env:
+        - name: GRPC_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: grpc-retry-fun-config
+              key: grpc.port
+        - name: GRPC_GO_LOG_VERBOSITY_LEVEL
+          value: "99"
+        - name: GRPC_GO_LOG_SEVERITY_LEVEL
+          value: "info"
+        
+        # Volume mounts for writable directories
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: run
+          mountPath: /var/run
+      
+      # Volumes for writable directories
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: run
+        emptyDir: {}
+      
+      # Graceful termination
+      terminationGracePeriodSeconds: 30
+      
+      # DNS configuration
+      dnsPolicy: ClusterFirst
+      
+      # Restart policy
+      restartPolicy: Always
