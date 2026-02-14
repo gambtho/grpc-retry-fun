@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asdfa-deployment
+  namespace: somens
+  labels:
+    app: asdfa
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: asdfa
+  template:
+    metadata:
+      labels:
+        app: asdfa
+    spec:
+      # Pod anti-affinity for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - asdfa
+              topologyKey: kubernetes.io/hostname
+      
+      # Topology spread constraints for better distribution
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: asdfa
+      
+      containers:
+      - name: asdfa
+        # TODO: Replace with actual ACR image path (e.g., myregistry.azurecr.io/grpc-greeter:1.0)
+        image: asdfasdf
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: grpc
+          protocol: TCP
+        
+        # Resource requests and limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Security context (configured as per requirements)
+        # Note: For production, consider setting runAsNonRoot: true and readOnlyRootFilesystem: true
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+        
+        # Liveness probe (using TCP for gRPC)
+        livenessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Readiness probe (using TCP for gRPC)
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Startup probe (using TCP for gRPC)
+        startupProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 12
