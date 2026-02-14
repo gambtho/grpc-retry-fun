@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: asdfa-service
+  namespace: somens
+  labels:
+    app: asdfa
+spec:
+  type: ClusterIP
+  selector:
+    app: asdfa
+  ports:
+  - name: grpc
+    protocol: TCP
+    port: 80
+    targetPort: 80
