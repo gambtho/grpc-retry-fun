@@ -1,0 +1,78 @@
+name: Deploy to AKS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CONTAINER_REGISTRY: grpcretryfun
+  AKS_CLUSTER_NAME: thgamble_dt
+  AKS_RESOURCE_GROUP: thgamble_dt_group
+  AKS_NAMESPACE: somens
+  APP_NAME: grpc-retry-fun
+  AZURE_SUBSCRIPTION_ID: d0ecd0d2-779b-4fd0-8f04-d46d07f05703
+  AZURE_TENANT_ID: 72f988bf-86f1-41af-91ab-2d7cd011db47
+  AZURE_CLIENT_ID: 122345
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Azure Login with OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ env.AZURE_CLIENT_ID }}
+        tenant-id: ${{ env.AZURE_TENANT_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+    - name: Login to Azure Container Registry
+      run: |
+        az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+    - name: Build and push Docker image
+      run: |
+        IMAGE_TAG=${{ github.sha }}
+        docker build -t ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${IMAGE_TAG} .
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${IMAGE_TAG}
+        docker tag ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:${IMAGE_TAG} ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:latest
+        docker push ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.APP_NAME }}:latest
+
+    - name: Set AKS context
+      uses: azure/aks-set-context@v3
+      with:
+        cluster-name: ${{ env.AKS_CLUSTER_NAME }}
+        resource-group: ${{ env.AKS_RESOURCE_GROUP }}
+
+    - name: Create namespace if not exists
+      run: |
+        kubectl create namespace ${{ env.AKS_NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy to AKS
+      run: |
+        IMAGE_TAG=${{ github.sha }}
+        
+        # Update deployment manifest with actual ACR name and image tag
+        sed -i "s|ACR_NAME|${{ env.AZURE_CONTAINER_REGISTRY }}|g" deploy/kubernetes/deployment.yaml
+        sed -i "s|IMAGE_TAG|${IMAGE_TAG}|g" deploy/kubernetes/deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f deploy/kubernetes/ -n ${{ env.AKS_NAMESPACE }}
+        
+        # Wait for rollout to complete
+        kubectl rollout status deployment/${{ env.APP_NAME }} -n ${{ env.AKS_NAMESPACE }} --timeout=5m
+
+    - name: Verify deployment
+      run: |
+        kubectl get all -n ${{ env.AKS_NAMESPACE }}
+        kubectl get deployment ${{ env.APP_NAME }} -n ${{ env.AKS_NAMESPACE }}
+        kubectl get pods -n ${{ env.AKS_NAMESPACE }} -l app=${{ env.APP_NAME }}
