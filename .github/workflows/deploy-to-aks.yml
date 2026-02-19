@@ -47,7 +47,7 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ inputs.subscription-id }}
 
-    - name: Get ACR credentials
+    - name: Get ACR details and login
       id: acr
       run: |
         # Get the ACR login server
@@ -55,13 +55,9 @@ jobs:
         ACR_LOGIN_SERVER=$(az acr show --name $ACR_NAME --query loginServer -o tsv)
         echo "acr-name=$ACR_NAME" >> $GITHUB_OUTPUT
         echo "acr-login-server=$ACR_LOGIN_SERVER" >> $GITHUB_OUTPUT
-
-    - name: Login to Azure Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ${{ steps.acr.outputs.acr-login-server }}
-        username: 00000000-0000-0000-0000-000000000000
-        password: ${{ secrets.AZURE_TOKEN }}
+        
+        # Login to ACR using the OIDC token from Azure Login
+        az acr login --name $ACR_NAME
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5

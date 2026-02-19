@@ -105,7 +105,11 @@ The repository includes a GitHub Actions workflow (`.github/workflows/deploy-to-
    - `AZURE_CLIENT_ID`: Your Azure service principal client ID
    - `AZURE_TENANT_ID`: Your Azure tenant ID (b06f66c5-f30b-4797-8dec-52cc6568e9aa)
 
-2. The workflow uses OIDC authentication for secure, keyless authentication to Azure.
+2. The workflow uses OIDC authentication for secure, keyless authentication to Azure and ACR.
+
+3. Ensure your Azure service principal has the following permissions:
+   - `AcrPush` role on the Azure Container Registry
+   - `Azure Kubernetes Service Cluster User Role` on the AKS cluster
 
 ### Trigger Deployment
 
