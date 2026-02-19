@@ -14,15 +14,12 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o greeter_server ./greeter_server
 
 # Runtime stage
-FROM gcr.io/distroless/static-debian11:nonroot
+FROM gcr.io/distroless/static-debian11
 
 WORKDIR /
 
 # Copy the binary from builder
 COPY --from=builder /app/greeter_server /greeter_server
-
-# Use non-root user
-USER 65532:65532
 
 # Expose the gRPC port
 EXPOSE 80

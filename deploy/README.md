@@ -169,7 +169,10 @@ The GitHub Actions workflow uses these environment variables:
 ## Security Considerations
 
 - Uses distroless base image for minimal attack surface
-- Runs as non-root user (UID 65532)
 - OIDC authentication instead of service principal keys
 - Private ACR with RBAC
 - Network policies can be added for additional pod-to-pod isolation
+- Security context configured per requirements:
+  - `runAsNonRoot: false` - allows running as root per configuration
+  - `readOnlyRootFilesystem: false` - allows writable filesystem per configuration
+  - `allowPrivilegeEscalation: false` - prevents privilege escalation
