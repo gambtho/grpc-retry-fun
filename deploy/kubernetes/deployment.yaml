@@ -26,6 +26,9 @@ spec:
           type: RuntimeDefault
       containers:
       - name: grpc-server
+        # Note: ${ACR_NAME} is replaced during deployment by the GitHub Actions workflow
+        # This placeholder is substituted with the actual ACR name from the resource group
+        # For manual deployment, replace ${ACR_NAME} with your actual ACR name
         image: ${ACR_NAME}.azurecr.io/grpc-retry-fun:1.0
         imagePullPolicy: Always
         ports:
