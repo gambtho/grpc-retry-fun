@@ -1,0 +1,122 @@
+name: Deploy to AKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      cluster-name:
+        description: 'AKS cluster name'
+        required: true
+        default: 'headlamp-thgamble'
+        type: string
+      resource-group:
+        description: 'Azure resource group'
+        required: true
+        default: 'thgamble'
+        type: string
+      namespace:
+        description: 'Kubernetes namespace'
+        required: true
+        default: 'yet-another'
+        type: string
+      subscription-id:
+        description: 'Azure subscription ID'
+        required: true
+        default: 'd98169bc-2d4a-491b-98cb-b69cbf002eb0'
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  IMAGE_NAME: grpc-retry-fun
+  IMAGE_TAG: "1.0"
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to AKS
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Azure Login with OIDC
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ inputs.subscription-id }}
+        
+    - name: Get ACR name from resource group
+      id: get-acr
+      run: |
+        ACR_NAME=$(az acr list --resource-group ${{ inputs.resource-group }} --query "[0].name" -o tsv)
+        if [ -z "$ACR_NAME" ]; then
+          echo "Error: No ACR found in resource group ${{ inputs.resource-group }}"
+          exit 1
+        fi
+        echo "ACR_NAME=$ACR_NAME" >> $GITHUB_OUTPUT
+        echo "ACR_LOGIN_SERVER=${ACR_NAME}.azurecr.io" >> $GITHUB_OUTPUT
+        echo "Found ACR: $ACR_NAME"
+        
+    - name: Build Docker image
+      run: |
+        docker build -t ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} .
+        docker tag ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
+                   ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+        
+    - name: Login to ACR
+      run: |
+        az acr login --name ${{ steps.get-acr.outputs.ACR_NAME }}
+        
+    - name: Push Docker image to ACR
+      run: |
+        docker push ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+        docker push ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+        
+    - name: Set AKS context
+      uses: azure/aks-set-context@v4
+      with:
+        cluster-name: ${{ inputs.cluster-name }}
+        resource-group: ${{ inputs.resource-group }}
+        
+    - name: Create namespace if not exists
+      run: |
+        kubectl get namespace ${{ inputs.namespace }} || kubectl create namespace ${{ inputs.namespace }}
+        
+    - name: Substitute ACR name in manifests
+      run: |
+        # Replace ACR_NAME placeholder with actual ACR name
+        find deploy/kubernetes/ -type f -name "*.yaml" -exec sed -i "s|\${ACR_NAME}|${{ steps.get-acr.outputs.ACR_NAME }}|g" {} \;
+        
+    - name: Deploy to AKS
+      run: |
+        kubectl apply -f deploy/kubernetes/ -n ${{ inputs.namespace }}
+        
+    - name: Wait for rollout to complete
+      run: |
+        kubectl rollout status deployment/grpc-retry-fun -n ${{ inputs.namespace }} --timeout=5m
+        
+    - name: Verify deployment
+      run: |
+        echo "=== Deployment Status ==="
+        kubectl get deployment grpc-retry-fun -n ${{ inputs.namespace }}
+        echo ""
+        echo "=== Pod Status ==="
+        kubectl get pods -l app=grpc-retry-fun -n ${{ inputs.namespace }}
+        echo ""
+        echo "=== Service Status ==="
+        kubectl get service grpc-retry-fun -n ${{ inputs.namespace }}
+        echo ""
+        echo "=== HPA Status ==="
+        kubectl get hpa grpc-retry-fun-hpa -n ${{ inputs.namespace }}
+        
+    - name: Display deployment info
+      run: |
+        echo "✅ Deployment completed successfully!"
+        echo ""
+        echo "Application: grpc-retry-fun"
+        echo "Namespace: ${{ inputs.namespace }}"
+        echo "Cluster: ${{ inputs.cluster-name }}"
+        echo "Image: ${{ steps.get-acr.outputs.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
