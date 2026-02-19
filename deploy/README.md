@@ -35,7 +35,7 @@ Before deploying to AKS, ensure you have:
 
 The Dockerfile uses a multi-stage build:
 1. **Builder stage**: Compiles the Go application using `golang:1.19-alpine`
-2. **Runtime stage**: Uses `gcr.io/distroless/static-debian11:nonroot` for minimal attack surface
+2. **Runtime stage**: Uses `gcr.io/distroless/static-debian11` for minimal attack surface
 
 The application runs on port 80 (configurable via `-port` flag).
 
