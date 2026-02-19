@@ -26,6 +26,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: grpc-retry-fun
+        # Image will be updated by CI/CD to: <ACR_NAME>.azurecr.io/grpc-retry-fun:1.0
         image: grpc-retry-fun:1.0
         imagePullPolicy: IfNotPresent
         ports:
