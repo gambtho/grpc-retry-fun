@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+*.md
+LICENSE
+
+# Artifacts
+artifacts
+
+# Deploy files
+deploy
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test files
+*_test.go
+
+# Temporary files
+*.tmp
+*.log
