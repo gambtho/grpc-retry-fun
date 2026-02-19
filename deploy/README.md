@@ -25,9 +25,11 @@ Before deploying to AKS, ensure you have:
 3. **Azure OIDC Configuration**:
    - Tenant ID: `b06f66c5-f30b-4797-8dec-52cc6568e9aa`
    - Subscription ID: `d98169bc-2d4a-491b-98cb-b69cbf002eb0`
-   - The service principal must have:
-     - `AcrPush` role on the ACR
+   - The service principal/managed identity must have:
+     - `AcrPush` role on the ACR (for CI/CD pipeline to push images)
      - `Azure Kubernetes Service Cluster User Role` on the AKS cluster
+   - The AKS cluster must have:
+     - `AcrPull` role on the ACR (for pulling images to deploy) or use ACR integration
 
 ## Architecture
 
@@ -151,8 +153,9 @@ The GitHub Actions workflow uses these environment variables:
 ### Common Issues
 
 1. **Image pull errors**:
-   - Verify ACR authentication
-   - Check that the service principal has `AcrPull` role
+   - Verify ACR authentication and integration with AKS
+   - Check that the AKS cluster has `AcrPull` role on the ACR
+   - Alternatively, verify ACR integration is enabled: `az aks update -n <cluster> -g <rg> --attach-acr <acr>`
 
 2. **Pod startup failures**:
    - Check logs: `kubectl logs -n yet-another -l app=grpc-retry-fun`
