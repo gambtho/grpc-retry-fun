@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-retry-fun
+  namespace: yet-another
+  labels:
+    app: grpc-retry-fun
+spec:
+  type: ClusterIP
+  selector:
+    app: grpc-retry-fun
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
