@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-retry-fun
+  namespace: a-project
+  annotations:
+    aks-desktop/deployed-by: pipeline
+    aks-desktop/pipeline-repo: gambtho/grpc-retry-fun
+  labels:
+    app: grpc-retry-fun
+    version: "1.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grpc-retry-fun
+  template:
+    metadata:
+      labels:
+        app: grpc-retry-fun
+        version: "1.0"
+    spec:
+      # Pod Anti-Affinity - prefer to schedule pods on different nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - grpc-retry-fun
+              topologyKey: kubernetes.io/hostname
+      
+      # Topology Spread Constraints - distribute pods across zones/nodes
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: grpc-retry-fun
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: grpc-retry-fun
+      
+      containers:
+      - name: grpc-retry-fun
+        image: grpc-retry-fun:1.0  # TODO: Update to full registry path (e.g., yourregistry.azurecr.io/grpc-retry-fun:1.0)
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: grpc
+          containerPort: 80
+          protocol: TCP
+        
+        # Resource requests and limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Security Context
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+        
+        # Liveness Probe - checks if container is alive
+        livenessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Readiness Probe - checks if container is ready to serve traffic
+        readinessProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 3
+        
+        # Startup Probe - checks if application has started
+        startupProbe:
+          tcpSocket:
+            port: 80
+          initialDelaySeconds: 0
+          periodSeconds: 5
+          timeoutSeconds: 3
+          successThreshold: 1
+          failureThreshold: 12
