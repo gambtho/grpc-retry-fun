@@ -43,7 +43,7 @@ deploy/
 ### Security
 - **Allow Privilege Escalation:** false
 - **Capabilities:** All dropped
-- **Run As Non-Root:** true (using distroless nonroot image)
+- **Run As Non-Root:** false
 - **Read-Only Root Filesystem:** false
 
 ## Deployment
