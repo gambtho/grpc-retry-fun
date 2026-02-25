@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grpc-retry-fun
-  namespace: a-project
+  namespace: new-aks-project
   annotations:
     aks-desktop/deployed-by: pipeline
     aks-desktop/pipeline-repo: gambtho/grpc-retry-fun
@@ -19,6 +19,7 @@ spec:
       labels:
         app: grpc-retry-fun
         version: "1.0"
+        azure.workload.identity/use: "true"
     spec:
       # Pod Anti-Affinity - prefer to schedule pods on different nodes
       affinity:
@@ -49,6 +50,7 @@ spec:
           matchLabels:
             app: grpc-retry-fun
       
+      serviceAccountName: grpc-retry-fun
       containers:
       - name: grpc-retry-fun
         image: grpc-retry-fun:1.0  # TODO: Update to full registry path (e.g., yourregistry.azurecr.io/grpc-retry-fun:1.0)
@@ -79,7 +81,8 @@ spec:
         
         # Liveness Probe - checks if container is alive
         livenessProbe:
-          tcpSocket:
+          httpGet:
+            path: /
             port: 80
           initialDelaySeconds: 10
           periodSeconds: 10
@@ -89,7 +92,8 @@ spec:
         
         # Readiness Probe - checks if container is ready to serve traffic
         readinessProbe:
-          tcpSocket:
+          httpGet:
+            path: /
             port: 80
           initialDelaySeconds: 5
           periodSeconds: 5
@@ -99,7 +103,8 @@ spec:
         
         # Startup Probe - checks if application has started
         startupProbe:
-          tcpSocket:
+          httpGet:
+            path: /
             port: 80
           initialDelaySeconds: 0
           periodSeconds: 5
