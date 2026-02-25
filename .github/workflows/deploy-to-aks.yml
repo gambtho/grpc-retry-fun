@@ -16,7 +16,7 @@ on:
       namespace:
         description: 'Kubernetes namespace'
         required: true
-        default: 'a-project'
+        default: 'new-aks-project'
         type: string
       subscription-id:
         description: 'Azure subscription ID'
