@@ -52,6 +52,10 @@ jobs:
 
       - name: Apply Kubernetes manifests
         run: |
+          # The -n flag sets the default namespace for resources without an explicit
+          # namespace in their metadata. Manifests in this repo already specify
+          # namespace: ${{ inputs.namespace }}, so the flag is consistent and ensures
+          # the correct namespace is used if any resource omits the field in the future.
           kubectl apply -f deploy/kubernetes/ -n ${{ inputs.namespace }}
 
       - name: Annotate deployments with pipeline run URL
