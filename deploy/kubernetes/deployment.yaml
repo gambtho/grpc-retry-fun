@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-retry-fun
+  namespace: wtf
+  labels:
+    app.kubernetes.io/name: grpc-retry-fun
+    app.kubernetes.io/instance: grpc-retry-fun
+    app.kubernetes.io/component: server
+    app.kubernetes.io/managed-by: kubectl
+  annotations:
+    aks-desktop/deployed-by: pipeline
+    aks-desktop/pipeline-repo: gambtho/grpc-retry-fun
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grpc-retry-fun
+      app.kubernetes.io/instance: grpc-retry-fun
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grpc-retry-fun
+        app.kubernetes.io/instance: grpc-retry-fun
+        app.kubernetes.io/component: server
+    spec:
+      # ── Security ──────────────────────────────────────────────────────────
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+
+      # ── Topology spread: distribute pods across nodes ──────────────────
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: grpc-retry-fun
+              app.kubernetes.io/instance: grpc-retry-fun
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: grpc-retry-fun
+              app.kubernetes.io/instance: grpc-retry-fun
+
+      # ── Anti-affinity: avoid co-locating replicas on the same node ──────
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: grpc-retry-fun
+                    app.kubernetes.io/instance: grpc-retry-fun
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: grpc-retry-fun
+          image: grpc-retry-fun:1.0
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+
+          # ── Resource limits ─────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # ── Container-level security ─────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            capabilities:
+              drop:
+                - ALL
+
+          # ── Startup probe — gives the server time to initialise ──────────
+          # Uses tcpSocket because greeter_server does not implement the
+          # standard gRPC Health Checking Protocol (grpc.health.v1.Health).
+          startupProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12   # up to 60 s before liveness takes over
+            successThreshold: 1
+            timeoutSeconds: 3
+
+          # ── Liveness probe — restart on hang/deadlock ────────────────────
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 0
+            periodSeconds: 15
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 3
+
+          # ── Readiness probe — gate traffic until ready ───────────────────
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 3

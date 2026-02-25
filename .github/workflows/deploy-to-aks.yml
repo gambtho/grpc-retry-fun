@@ -1,0 +1,62 @@
+name: Deploy to AKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      cluster-name:
+        description: "AKS cluster name"
+        required: true
+        default: "dt"
+        type: string
+      resource-group:
+        description: "Azure resource group"
+        required: true
+        default: "thgamble"
+        type: string
+      namespace:
+        description: "Kubernetes namespace"
+        required: true
+        default: "wtf"
+        type: string
+      subscription-id:
+        description: "Azure subscription ID"
+        required: true
+        default: "d98169bc-2d4a-491b-98cb-b69cbf002eb0"
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy grpc-retry-fun to AKS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ inputs.subscription-id }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          cluster-name: ${{ inputs.cluster-name }}
+          resource-group: ${{ inputs.resource-group }}
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f deploy/kubernetes/ -n ${{ inputs.namespace }}
+
+      - name: Annotate deployments with pipeline run URL
+        run: |
+          kubectl annotate deployment --all \
+            -n ${{ inputs.namespace }} \
+            aks-desktop/pipeline-run-url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+            --overwrite
