@@ -69,9 +69,9 @@ spec:
 
       containers:
         - name: grpc-retry-fun
+          # Local placeholder — the deploy-to-aks workflow patches this at deploy time
+          # to the fully-qualified ACR path: <acr-name>.azurecr.io/grpc-retry-fun:1.0
           image: grpc-retry-fun:1.0
-          # NOTE: For production use, replace with a fully-qualified registry path,
-          # e.g. myregistry.azurecr.io/grpc-retry-fun:1.0 or a digest-pinned reference.
           imagePullPolicy: IfNotPresent
 
           ports:

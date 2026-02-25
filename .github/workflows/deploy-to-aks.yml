@@ -14,7 +14,10 @@ on:
         default: "thgamble"
         type: string
       namespace:
-        description: "Kubernetes namespace"
+        description: >
+          Kubernetes namespace to deploy into. Must match the namespace field
+          in deploy/kubernetes/ manifests (currently: wtf). If you change this
+          value you must also update the manifests before deploying.
         required: true
         default: "wtf"
         type: string
@@ -22,6 +25,14 @@ on:
         description: "Azure subscription ID"
         required: true
         default: "d98169bc-2d4a-491b-98cb-b69cbf002eb0"
+        type: string
+      acr-name:
+        description: >
+          Azure Container Registry name (without .azurecr.io suffix).
+          The image will be pushed as <acr-name>.azurecr.io/grpc-retry-fun:1.0
+          and that reference will be injected into the Deployment before apply.
+        required: true
+        default: ""
         type: string
 
 permissions:
@@ -32,6 +43,10 @@ jobs:
   deploy:
     name: Deploy grpc-retry-fun to AKS
     runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: grpc-retry-fun
+      IMAGE_TAG: "1.0"
 
     steps:
       - name: Checkout repository
@@ -44,6 +59,29 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ inputs.subscription-id }}
 
+      # ── Build & push to ACR ───────────────────────────────────────────────
+      # Builds the image inside the GitHub Actions runner and pushes it to the
+      # specified Azure Container Registry so AKS can pull it at deploy time.
+      - name: Log in to Azure Container Registry
+        run: az acr login --name ${{ inputs.acr-name }}
+
+      - name: Build and push image to ACR
+        run: |
+          REGISTRY="${{ inputs.acr-name }}.azurecr.io"
+          FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          docker build -t "${FULL_IMAGE}" .
+          docker push "${FULL_IMAGE}"
+          echo "FULL_IMAGE=${FULL_IMAGE}" >> "$GITHUB_ENV"
+
+      # ── Patch the Deployment image reference ────────────────────────────
+      # Replace the local image placeholder with the fully-qualified ACR path
+      # so kubectl apply uses the registry image that AKS can actually pull.
+      - name: Patch deployment image reference
+        run: |
+          sed -i "s|image: ${IMAGE_NAME}:${IMAGE_TAG}|image: ${FULL_IMAGE}|g" \
+            deploy/kubernetes/deployment.yaml
+
+      # ── Deploy to AKS ────────────────────────────────────────────────────
       - name: Set AKS context
         uses: azure/aks-set-context@v4
         with:
@@ -53,9 +91,8 @@ jobs:
       - name: Apply Kubernetes manifests
         run: |
           # The -n flag sets the default namespace for resources without an explicit
-          # namespace in their metadata. Manifests in this repo already specify
-          # namespace: ${{ inputs.namespace }}, so the flag is consistent and ensures
-          # the correct namespace is used if any resource omits the field in the future.
+          # namespace field. Manifests in this repo already specify namespace: wtf.
+          # Ensure the 'namespace' input matches the manifests before deploying.
           kubectl apply -f deploy/kubernetes/ -n ${{ inputs.namespace }}
 
       - name: Annotate deployments with pipeline run URL
