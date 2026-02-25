@@ -17,7 +17,7 @@ spec:
     app.kubernetes.io/name: grpc-retry-fun
     app.kubernetes.io/instance: grpc-retry-fun
   ports:
-    - name: grpc
+    - name: http
       protocol: TCP
-      port: 50051
-      targetPort: grpc   # references the named port in the Deployment
+      port: 80
+      targetPort: http   # references the named port in the Deployment

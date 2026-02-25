@@ -30,11 +30,10 @@ spec:
         app.kubernetes.io/component: server
     spec:
       # ── Security ──────────────────────────────────────────────────────────
-      automountServiceAccountToken: false
+      serviceAccountName: grpc-retry-fun
+      automountServiceAccountToken: true
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 65532
-        runAsGroup: 65532
+        runAsNonRoot: false
         seccompProfile:
           type: RuntimeDefault
 
@@ -75,8 +74,8 @@ spec:
           imagePullPolicy: IfNotPresent
 
           ports:
-            - name: grpc
-              containerPort: 50051
+            - name: http
+              containerPort: 80
               protocol: TCP
 
           # ── Resource limits ─────────────────────────────────────────────
@@ -91,20 +90,17 @@ spec:
           # ── Container-level security ─────────────────────────────────────
           securityContext:
             allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsNonRoot: true
-            runAsUser: 65532
-            runAsGroup: 65532
+            readOnlyRootFilesystem: false
+            runAsNonRoot: false
             capabilities:
               drop:
                 - ALL
 
           # ── Startup probe — gives the server time to initialise ──────────
-          # Uses tcpSocket because greeter_server does not implement the
-          # standard gRPC Health Checking Protocol (grpc.health.v1.Health).
           startupProbe:
-            tcpSocket:
-              port: grpc
+            httpGet:
+              path: /
+              port: http
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 12   # up to 60 s before liveness takes over
@@ -113,8 +109,9 @@ spec:
 
           # ── Liveness probe — restart on hang/deadlock ────────────────────
           livenessProbe:
-            tcpSocket:
-              port: grpc
+            httpGet:
+              path: /
+              port: http
             initialDelaySeconds: 0
             periodSeconds: 15
             failureThreshold: 3
@@ -123,8 +120,9 @@ spec:
 
           # ── Readiness probe — gate traffic until ready ───────────────────
           readinessProbe:
-            tcpSocket:
-              port: grpc
+            httpGet:
+              path: /
+              port: http
             initialDelaySeconds: 0
             periodSeconds: 10
             failureThreshold: 3
