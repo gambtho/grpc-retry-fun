@@ -1,0 +1,43 @@
+# FIX 4: .dockerignore — keeps the build context lean and prevents secrets /
+#         ephemeral files from leaking into the image layer cache.
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# CI / tooling
+.github
+artifacts
+
+# Editor / IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS artefacts
+.DS_Store
+Thumbs.db
+
+# Test output / coverage
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Local environment / secrets
+.env
+.env.*
+*.pem
+*.key
+*.crt
+
+# Docker files (not needed inside the image)
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+LICENSE
