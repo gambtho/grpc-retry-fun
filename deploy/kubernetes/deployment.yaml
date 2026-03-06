@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-retry-fun
+  namespace: new
+  annotations:
+    aks-project/deployed-by: pipeline
+    aks-project/pipeline-repo: gambtho/grpc-retry-fun
+  labels:
+    app.kubernetes.io/name: grpc-retry-fun
+    app.kubernetes.io/version: "1.0"
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grpc-retry-fun
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grpc-retry-fun
+        app.kubernetes.io/version: "1.0"
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: grpc-retry-fun
+      automountServiceAccountToken: true
+
+      # ── Security ─────────────────────────────────────────────────────────────
+      securityContext:
+        # Set to false per deployment config; the Dockerfile already sets USER
+        # nonroot (uid 65532) so the container will still run as non-root in
+        # practice. Change to true to enforce this at the pod level.
+        runAsNonRoot: false
+        seccompProfile:
+          type: RuntimeDefault
+
+      # ── Topology & Anti-Affinity ──────────────────────────────────────────────
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: grpc-retry-fun
+                topologyKey: kubernetes.io/hostname
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: grpc-retry-fun
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: grpc-retry-fun
+
+      containers:
+        - name: grpc-retry-fun
+          # IMAGE is replaced at deploy time:
+          #   <acr-login-server>/grpc-retry-fun:<commit-sha>
+          image: grpc-retry-fun:1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50051
+              protocol: TCP
+
+          # ── Container Security ────────────────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+
+          # ── Resources ─────────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # ── Health Probes ──────────────────────────────────────────────────────
+          # Uses Kubernetes native gRPC probe (requires k8s ≥ 1.24).
+          # The server does not currently register a gRPC Health service, so probes
+          # fall back to a TCP-socket check that verifies the port is accepting
+          # connections – replace with grpcAction once the health service is added.
+          startupProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12   # 60 s budget for cold start
+            successThreshold: 1
+            timeoutSeconds: 2
+          livenessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 0
+            periodSeconds: 15
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 2
+          readinessProbe:
+            tcpSocket:
+              port: grpc
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 2
+
+      # Give pods time to drain in-flight RPCs before termination
+      terminationGracePeriodSeconds: 30
