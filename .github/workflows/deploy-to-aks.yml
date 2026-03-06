@@ -16,10 +16,10 @@ on:
       namespace:
         description: >
           Kubernetes namespace to deploy into. Must match the namespace field
-          in deploy/kubernetes/ manifests (currently: wtf). If you change this
+          in deploy/kubernetes/ manifests (currently: a-project). If you change this
           value you must also update the manifests before deploying.
         required: true
-        default: "wtf"
+        default: "a-project"
         type: string
       subscription-id:
         description: "Azure subscription ID"
@@ -91,7 +91,7 @@ jobs:
       - name: Apply Kubernetes manifests
         run: |
           # The -n flag sets the default namespace for resources without an explicit
-          # namespace field. Manifests in this repo already specify namespace: wtf.
+          # namespace field. Manifests in this repo already specify namespace: a-project.
           # Ensure the 'namespace' input matches the manifests before deploying.
           kubectl apply -f deploy/kubernetes/ -n ${{ inputs.namespace }}
 

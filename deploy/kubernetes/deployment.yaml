@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: grpc-retry-fun
-  namespace: wtf
+  namespace: a-project
   labels:
     app.kubernetes.io/name: grpc-retry-fun
     app.kubernetes.io/instance: grpc-retry-fun
