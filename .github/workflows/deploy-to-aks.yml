@@ -59,7 +59,7 @@ jobs:
 
       # ── Authenticate Docker to ACR ──────────────────────────────────────────
       - name: Log in to ACR
-        run: az acr login --name "${{ secrets.ACR_LOGIN_SERVER }}"
+        run: az acr login --login-server "${{ secrets.ACR_LOGIN_SERVER }}"
 
       # ── Build & push ────────────────────────────────────────────────────────
       - name: Build and push Docker image
