@@ -5,33 +5,33 @@ FROM golang:1.19-alpine AS builder
 
 WORKDIR /src
 
-# Copy dependency manifests and vendored modules for offline, cache-friendly builds
+# Copy dependency manifests first for layer-cache efficiency
 COPY go.mod go.sum ./
-COPY vendor/ vendor/
 
-# Copy the rest of the source tree
+# Download dependencies (uses module cache layer)
+RUN go mod download
+
+# Copy the full source tree
 COPY . .
 
-# Build a fully-static server binary using vendored deps (no network required)
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -trimpath -ldflags="-s -w" \
+# Build a fully-static server binary
+# CGO_ENABLED=0 produces a self-contained binary with no libc dependency
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" \
     -o /app/greeter_server ./greeter_server
 
 # ── Stage 2: runtime ─────────────────────────────────────────────────────────
-FROM alpine:3.18
-
-# Create non-root user/group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Use the non-debug, root-default distroless image so the server can bind to
+# port 80 (a privileged port) without requiring CAP_NET_BIND_SERVICE.
+# The pod security context sets runAsNonRoot: false to match this.
+FROM gcr.io/distroless/static-debian12
 
 WORKDIR /app
 
 # Copy only the compiled binary from the builder stage
 COPY --from=builder /app/greeter_server /app/greeter_server
 
-# Ensure the binary is owned by the non-root user
-RUN chown appuser:appgroup /app/greeter_server && chmod 550 /app/greeter_server
+# The Kubernetes manifests set targetPort: 80 so the gRPC server is started
+# on port 80 to keep the container port and service targetPort aligned.
+EXPOSE 80
 
-USER appuser
-
-EXPOSE 50051
-
-CMD ["/app/greeter_server"]
+CMD ["/app/greeter_server", "-port", "80"]

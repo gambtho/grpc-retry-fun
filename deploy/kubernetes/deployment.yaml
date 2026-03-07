@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: grpc-retry-fun
   namespace: 3-6-8pm
+  labels:
+    app: grpc-retry-fun
   annotations:
     aks-project/deployed-by: pipeline
     aks-project/pipeline-repo: gambtho/grpc-retry-fun
@@ -16,16 +18,19 @@ spec:
       labels:
         app: grpc-retry-fun
     spec:
+      serviceAccountName: grpc-retry-fun
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 1000
+        runAsNonRoot: false
       containers:
         - name: grpc-retry-fun
           image: grpc-retry-fun:1.0
           ports:
             - name: grpc
-              containerPort: 50051
+              containerPort: 80
               protocol: TCP
+          args:
+            - "-port"
+            - "80"
           resources:
             requests:
               cpu: 100m
@@ -35,23 +40,29 @@ spec:
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
-            runAsNonRoot: true
-            runAsUser: 1000
+            runAsNonRoot: false
+            readOnlyRootFilesystem: false
           livenessProbe:
-            tcpSocket:
-              port: 50051
+            httpGet:
+              path: /
+              port: 80
             initialDelaySeconds: 15
             periodSeconds: 20
+            failureThreshold: 3
           readinessProbe:
-            tcpSocket:
-              port: 50051
+            httpGet:
+              path: /
+              port: 80
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
           startupProbe:
-            tcpSocket:
-              port: 50051
-            failureThreshold: 30
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 30
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -64,7 +75,7 @@ spec:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
               app: grpc-retry-fun

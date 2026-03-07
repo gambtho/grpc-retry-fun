@@ -1,77 +1,63 @@
-# Deployment Setup — grpc-retry-fun
+# Deployment — grpc-retry-fun
 
-## Overview
+This directory contains Kubernetes manifests and supporting files to deploy
+the **grpc-retry-fun** gRPC application to Azure Kubernetes Service (AKS).
 
-This directory contains Kubernetes manifests and a GitHub Actions workflow for deploying the
-`grpc-retry-fun` gRPC server to Azure Kubernetes Service (AKS).
-
-## Stack
-
-| Item | Value |
-|------|-------|
-| Language | Go 1.19 |
-| Protocol | gRPC (port 50051) |
-| Container image | `grpc-retry-fun:1.0` |
-| Base image | `alpine:3.18` (multi-stage build from `golang:1.19-alpine`) |
-
-## Directory structure
+## Directory layout
 
 ```
 deploy/
-├── kubernetes/
-│   ├── namespace.yaml    # Namespace: 3-6-8pm
-│   ├── deployment.yaml   # Deployment (1 replica, resource limits, probes, anti-affinity)
-│   └── service.yaml      # ClusterIP Service on port 50051
-└── README.md             # This file
+└── kubernetes/
+    ├── namespace.yaml        # Namespace: 3-6-8pm
+    ├── serviceaccount.yaml   # Dedicated ServiceAccount (no automount)
+    ├── deployment.yaml       # App Deployment (1 replica, resource limits, probes)
+    └── service.yaml          # ClusterIP Service on port 50051 → targetPort 80
 ```
 
-## AKS target
+## Quick reference
 
-| Setting | Value |
-|---------|-------|
-| Cluster | `cluster-a` |
-| Resource group | `pr-314-test-rg` |
-| Namespace | `3-6-8pm` |
-| Service type | `ClusterIP` |
+| Setting                | Value                    |
+|------------------------|--------------------------|
+| AKS Cluster            | cluster-a                |
+| Resource Group         | pr-314-test-rg           |
+| Namespace              | 3-6-8pm                  |
+| Image                  | grpc-retry-fun:1.0       |
+| Service Type           | ClusterIP                |
+| gRPC Port (container)  | 50051                    |
+| Target Port            | 80                       |
+| Replicas               | 1                        |
+| CPU Request / Limit    | 100m / 500m              |
+| Memory Request / Limit | 128Mi / 512Mi            |
 
-## Deployment
-
-Deployments are triggered manually via the GitHub Actions workflow at
-`.github/workflows/deploy-to-aks.yml` using `workflow_dispatch`.
-
-### Required GitHub secrets
-
-| Secret | Purpose |
-|--------|---------|
-| `AZURE_CLIENT_ID` | Federated identity client ID (OIDC) |
-| `AZURE_TENANT_ID` | Azure AD tenant ID |
-| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
-
-### Manual trigger
-
-1. Navigate to **Actions → Deploy to AKS** in the GitHub repository.
-2. Click **Run workflow**.
-3. Optionally override `cluster-name`, `resource-group`, or `namespace`.
-
-### Dry-run validation
+## Manual deployment
 
 ```bash
-kubectl apply --dry-run=client -f deploy/kubernetes/
+# Authenticate against AKS
+az aks get-credentials --resource-group pr-314-test-rg --name cluster-a
+
+# Apply all manifests
+kubectl apply -f deploy/kubernetes/ -n 3-6-8pm
 ```
 
-## Resource limits
+## CI/CD
 
-| Resource | Request | Limit |
-|----------|---------|-------|
-| CPU | 100m | 500m |
-| Memory | 128Mi | 512Mi |
+Deployments are triggered via the **Deploy to AKS** GitHub Actions workflow
+(`/.github/workflows/deploy-to-aks.yml`).  The workflow is `workflow_dispatch`
+only — it is never triggered automatically on push.
 
-## Health probes
+Azure credentials are provided through repository secrets using OIDC federated
+identity (no long-lived client secrets):
 
-All probes use `tcpSocket` on port **50051**:
+| Secret                  | Purpose                              |
+|-------------------------|--------------------------------------|
+| `AZURE_CLIENT_ID`       | Managed identity / app client ID    |
+| `AZURE_TENANT_ID`       | Azure AD tenant                      |
+| `AZURE_SUBSCRIPTION_ID` | Target subscription                  |
 
-| Probe | Initial Delay | Period | Failure Threshold |
-|-------|--------------|--------|-------------------|
-| Startup | — | 10s | 30 |
-| Liveness | 15s | 20s | 3 (default) |
-| Readiness | 5s | 10s | 3 (default) |
+## Health probes note
+
+The Deployment configures `httpGet` probes on path `/` (port 80).  The gRPC
+server itself does not expose an HTTP/1.1 endpoint; add a lightweight HTTP
+health-check server (e.g. using `net/http` on a second port) or switch the
+probe type to `tcpSocket` / `grpc` if you need live probe responses from the
+server process.

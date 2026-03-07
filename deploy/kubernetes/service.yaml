@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: grpc-retry-fun
   namespace: 3-6-8pm
+  labels:
+    app: grpc-retry-fun
 spec:
   type: ClusterIP
   selector:
@@ -10,5 +12,5 @@ spec:
   ports:
     - name: grpc
       protocol: TCP
-      port: 50051
-      targetPort: 50051
+      port: 80
+      targetPort: 80
