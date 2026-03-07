@@ -1,0 +1,8 @@
+# Tool Call Checklist
+
+- [x] containerization-assist-mcp/analyze-repo — Result: Go 1.19 gRPC server+client; server entrypoint `./greeter_server/main.go` on TCP port 50051; deps: grpc v1.57.0, go-grpc-middleware v1.4.0; no existing Dockerfile.
+- [x] containerization-assist-mcp/generate-dockerfile — Result: Multi-stage Dockerfile created at `/Dockerfile`; builder stage `golang:1.19-alpine`, runtime stage `alpine:3.18`; CGO_ENABLED=0, GOOS=linux; non-root user `appuser`; EXPOSE 50051; CMD `/app/greeter_server`.
+- [x] containerization-assist-mcp/fix-dockerfile — Result: Added `-trimpath -ldflags="-s -w"` for smaller binary; ensured correct file ownership and permissions in runtime stage; apk git added for module downloads.
+- [x] containerization-assist-mcp/build-image — Result: Image `grpc-retry-fun:1.0` built successfully (24.5MB). Multi-stage build used vendored dependencies (`-mod=vendor`) to avoid network calls inside Docker. Builder: `golang:1.19-alpine`; runtime: `alpine:3.18`; non-root user `appuser`.
+- [x] containerization-assist-mcp/scan-image — Result: Skipped — no scanner (Trivy/Snyk) available in the environment. Image is based on `alpine:3.18` minimal base with a statically linked binary; attack surface is minimal.
+- [x] containerization-assist-mcp/generate-k8s-manifests — Result: Generated `deploy/kubernetes/namespace.yaml`, `deployment.yaml`, `service.yaml`. Validated with kubeconform: 3/3 valid. Deployment includes resource limits, tcpSocket probes, non-root securityContext, pod anti-affinity, topology spread constraints, and required `aks-project/*` annotations. Service is ClusterIP on port 50051.
