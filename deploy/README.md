@@ -11,7 +11,7 @@ deploy/
     ├── namespace.yaml        # Namespace: 3-6-8pm
     ├── serviceaccount.yaml   # Dedicated ServiceAccount (no automount)
     ├── deployment.yaml       # App Deployment (1 replica, resource limits, probes)
-    └── service.yaml          # ClusterIP Service on port 50051 → targetPort 80
+    └── service.yaml          # ClusterIP Service on port 80 → targetPort 80
 ```
 
 ## Quick reference
@@ -23,7 +23,7 @@ deploy/
 | Namespace              | 3-6-8pm                  |
 | Image                  | grpc-retry-fun:1.0       |
 | Service Type           | ClusterIP                |
-| gRPC Port (container)  | 50051                    |
+| Container Port         | 80                       |
 | Target Port            | 80                       |
 | Replicas               | 1                        |
 | CPU Request / Limit    | 100m / 500m              |
