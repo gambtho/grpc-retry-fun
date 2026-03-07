@@ -29,7 +29,7 @@ COPY --from=builder /out/greeter_server /greeter_server
 # Run as non-root UID (scratch has no user database; set numeric UID directly)
 USER 65534:65534
 
-EXPOSE 50051
+EXPOSE 80
 
 # HEALTHCHECK is not supported in scratch-based images via HTTP;
 # gRPC health checks require grpc-health-probe in the runtime image.

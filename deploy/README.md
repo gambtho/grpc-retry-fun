@@ -12,7 +12,7 @@ deploy/
     ├── namespace.yaml        # Namespace: a-project
     ├── serviceaccount.yaml   # ServiceAccount for the workload
     ├── deployment.yaml       # Deployment (1 replica, resource limits, probes)
-    └── service.yaml          # ClusterIP Service on port 50051 (gRPC)
+    └── service.yaml          # ClusterIP Service on port 80 (HTTP)
 
 .github/
 └── workflows/
@@ -24,7 +24,7 @@ deploy/
 | Property | Value |
 |---|---|
 | **Language** | Go 1.21 |
-| **Protocol** | gRPC (port 50051) |
+| **Protocol** | HTTP (port 80) |
 | **Image** | `grpc-retry-fun:1.0` |
 | **Base image** | `scratch` (8 MB, minimal attack surface) |
 
@@ -36,7 +36,7 @@ deploy/
 | **Resource Group** | `thgamble` |
 | **Namespace** | `a-project` |
 | **Service Type** | `ClusterIP` |
-| **Port** | `50051` (gRPC) |
+| **Port** | `80` (HTTP) |
 | **Replicas** | `1` |
 
 ## GitHub Actions Workflow
@@ -79,5 +79,5 @@ kubectl apply --dry-run=client -f deploy/kubernetes/
 docker build -t grpc-retry-fun:1.0 .
 
 # Run server locally
-docker run --rm -p 50051:50051 grpc-retry-fun:1.0
+docker run --rm -p 80:80 grpc-retry-fun:1.0
 ```
