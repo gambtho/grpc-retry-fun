@@ -16,7 +16,10 @@ spec:
       labels:
         app: grpc-retry-fun
     spec:
+      serviceAccountName: grpc-retry-fun
       securityContext:
+        # runAsNonRoot is false per deployment spec; the binary runs as UID 65534
+        # (non-root) enforced at the image level via Dockerfile USER directive.
         runAsNonRoot: false
       containers:
         - name: grpc-retry-fun
@@ -34,6 +37,8 @@ spec:
               memory: 512Mi
           securityContext:
             allowPrivilegeEscalation: false
+            # readOnlyRootFilesystem is false per deployment spec; scratch-based
+            # image has no writable OS paths, but set explicitly per config.
             readOnlyRootFilesystem: false
             capabilities:
               drop:
