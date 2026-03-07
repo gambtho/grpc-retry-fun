@@ -1,0 +1,62 @@
+name: Deploy to AKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      cluster-name:
+        description: AKS cluster name
+        required: true
+        type: string
+        default: dt
+      resource-group:
+        description: Azure resource group
+        required: true
+        type: string
+        default: thgamble
+      namespace:
+        description: Kubernetes namespace
+        required: true
+        type: string
+        default: a-project
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          cluster-name: ${{ inputs.cluster-name }}
+          resource-group: ${{ inputs.resource-group }}
+
+      - name: Install kubelogin
+        uses: azure/use-kubelogin@v1
+        with:
+          skip-cache: 'true'
+
+      - name: Convert kubeconfig for AAD workload identity
+        run: kubelogin convert-kubeconfig -l workloadidentity
+
+      - name: Apply Kubernetes manifests
+        run: kubectl apply -f deploy/kubernetes/ -n ${{ inputs.namespace }}
+
+      - name: Annotate deployments with pipeline run URL
+        run: |
+          kubectl annotate deployment --all \
+            -n ${{ inputs.namespace }} \
+            aks-project/pipeline-run-url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+            --overwrite
