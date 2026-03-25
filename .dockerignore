@@ -1,0 +1,26 @@
+# Version control
+.git
+.gitignore
+
+# CI / local tooling
+.github
+artifacts
+
+# Editor and OS cruft
+.idea
+.vscode
+*.swp
+*.swo
+.DS_Store
+
+# Build outputs (avoid re-importing stale local binaries)
+bin/
+dist/
+
+# Test artefacts
+**/*_test.go
+coverage.out
+*.test
+
+# Deployment manifests (not needed at build time)
+deploy/

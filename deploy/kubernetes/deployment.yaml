@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grpc-retry-fun
+  namespace: ns-regular
+  annotations:
+    aks-project/deployed-by: pipeline
+    aks-project/pipeline-repo: gambtho/grpc-retry-fun
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grpc-retry-fun
+  template:
+    metadata:
+      labels:
+        app: grpc-retry-fun
+    spec:
+      securityContext:
+        runAsNonRoot: false
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: grpc-retry-fun
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: grpc-retry-fun
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: grpc-retry-fun
+          image: grpc-retry-fun:1.0
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 30
