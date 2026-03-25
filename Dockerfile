@@ -41,8 +41,8 @@ LABEL org.opencontainers.image.description="gRPC greeter server (grpc-retry-fun)
 # Copy only the compiled binary – nothing else from the builder stage.
 COPY --from=builder /bin/greeter_server /bin/greeter_server
 
-# gRPC service port (the server listens on :50051 by default).
-EXPOSE 50051
+# HTTP port used by the service and health probes.
+EXPOSE 80
 
 # Explicitly enforce non-root execution (distroless nonroot UID 65532).
 USER nonroot:nonroot
