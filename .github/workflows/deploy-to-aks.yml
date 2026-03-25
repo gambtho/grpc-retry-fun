@@ -6,15 +6,15 @@ on:
       cluster-name:
         description: AKS cluster name
         required: true
-        default: cluster-a
+        default: cluster-pr468
       resource-group:
         description: Azure resource group
         required: true
-        default: pr-314-test-rg
+        default: pr-468-test-rg
       namespace:
         description: Kubernetes namespace
         required: true
-        default: 3-6-8pm
+        default: ns-regular
 
 permissions:
   id-token: write
