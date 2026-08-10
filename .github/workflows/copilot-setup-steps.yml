@@ -8,7 +8,7 @@ on:
 
 jobs:
   copilot-setup-steps:
-    runs-on: copilot-agents-k8s
+    runs-on: copilot-agents
     permissions:
       contents: read
     steps:
