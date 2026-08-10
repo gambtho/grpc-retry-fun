@@ -2,6 +2,11 @@
 
 # gRPC Hello World
 
+## Prerequisites
+
+- Go 1.19 (as specified in `/home/runner/_work/grpc-retry-fun/grpc-retry-fun/go.mod`)
+- `protoc` is only required when regenerating the gRPC stubs
+
 Follow these steps (Linux only):
 
  1. Run the server:
