@@ -81,8 +81,9 @@ func main() {
 		count++
 
 		duration := time.Now().Add(45 * time.Second)
-		ctx, _ := context.WithDeadline(context.Background(), duration)
+		ctx, cancel := context.WithDeadline(context.Background(), duration)
 		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
+		cancel()
 		if err != nil {
 			log.Printf("could not greet: %v", err)
 		}
