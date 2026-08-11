@@ -34,3 +34,11 @@ Follow these steps (Linux only):
 5. Observe the behavior in the two client terminals
    - reconnect client will have a single timeout, then reconnect
    - no_reconnect client will have repeated timeouts
+
+## Makefile targets
+
+| Target | Command | Description |
+| --- | --- | --- |
+| `build` | `go build ./...` | Compile all packages |
+| `test` | `go test ./...` | Run all tests |
+| `vet` | `go vet ./...` | Run static analysis |
